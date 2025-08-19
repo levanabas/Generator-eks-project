@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: namegen
+  labels:
+    app: namegen
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: namegen
+  template:
+    metadata:
+      labels:
+        app: namegen
+    spec:
+      containers:
+      - name: namegen
+        image: public.ecr.aws/k5u0o7b3/team2-namegen:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MONGODB_URL
+          value: mongodb://mongo:27017/namegen

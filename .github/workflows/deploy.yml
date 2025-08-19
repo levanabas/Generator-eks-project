@@ -1,0 +1,43 @@
+name: Deploy to EKS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-1     # ← היה us-east-2
+
+    # ← במקום ECR Public: לוגין ל-ECR פרטי שלך
+    - name: Login to Amazon ECR (private)
+      id: ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build Docker image
+      run: |
+        REGISTRY="${{ steps.ecr.outputs.registry }}"   # למשל 3397....dkr.ecr.eu-west-1.amazonaws.com
+        IMAGE="$REGISTRY/namegen:latest"               # ← שם ה-repo שלך ב-ECR
+        echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+        docker build -t "$IMAGE" .
+
+    - name: Push Docker image to ECR
+      run: |
+        docker push "$IMAGE"
+
+    - name: Update kubeconfig
+      run: aws eks update-kubeconfig --name dev-cluster --region eu-west-1  # ← היה namegen-cluster/us-east-2
+
+    - name: Deploy to EKS
+      run: kubectl apply -f k8s-manifests/
