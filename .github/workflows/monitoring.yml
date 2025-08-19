@@ -1,0 +1,64 @@
+name: Install/Upgrade Monitoring (Grafana + Prometheus)
+
+on:
+  workflow_dispatch:   # run manually from Actions tab
+
+env:
+  AWS_REGION: eu-west-1
+  EKS_CLUSTER: dev-cluster
+  NAMESPACE: monitoring
+
+jobs:
+  monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+
+      - name: Ensure namespace exists
+        run: kubectl create ns $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Add/Update helm repo
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+      - name: Install/Upgrade kube-prometheus-stack
+        run: |
+          helm upgrade --install monitoring prometheus-community/kube-prometheus-stack -n $NAMESPACE \
+            --set grafana.service.type=LoadBalancer \
+            --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=nlb \
+            --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+            --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-nlb-target-type"=ip \
+            --set prometheus.service.type=LoadBalancer \
+            --reuse-values
+
+      - name: Show external URLs (Grafana & Prometheus)
+        shell: bash
+        run: |
+          for i in {1..20}; do
+            GRAFANA=$(kubectl -n $NAMESPACE get svc monitoring-grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            PROM=$(kubectl -n $NAMESPACE get svc monitoring-kube-prometheus-prometheus -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            if [[ -n "$GRAFANA" && -n "$PROM" ]]; then break; fi
+            echo "waiting for LoadBalancers… ($i/20)"; sleep 10
+          done
+          echo "Grafana URL:    http://$GRAFANA"
+          echo "Prometheus URL: http://$PROM:9090"
+          echo "To get Grafana admin password, run locally:"
+          echo 'kubectl get secret -n monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 -d; echo'
