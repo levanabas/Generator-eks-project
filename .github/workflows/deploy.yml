@@ -41,3 +41,11 @@ jobs:
 
     - name: Deploy to EKS
       run: kubectl apply -f k8s-manifests/
+
+    - name: Force image update to private ECR
+      run: |
+        REGISTRY="${{ steps.ecr.outputs.registry }}"
+        IMAGE="$REGISTRY/namegen:latest"
+        kubectl set image deployment/namegen namegen="$IMAGE" -n namegen
+        kubectl rollout status deployment/namegen -n namegen
+
