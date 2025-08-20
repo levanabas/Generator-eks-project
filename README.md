@@ -1,356 +1,253 @@
-```markdown
-# 🚀 DevOps Final Project - Team 2
+# 🚀 EKS with CI/CD – Random Name Generator (user5)
 
 <div align="center">
 
 [![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
-[![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
-[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Node.js](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-%234ea94b.svg?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
-[![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=Prometheus&logoColor=white)](https://prometheus.io/)
-[![Grafana](https://img.shields.io/badge/grafana-%23F46800.svg?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com/)
+[![AWS EKS](https://img.shields.io/badge/AWS-EKS-%23FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/eks/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-3.6-4ea94b?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com/)
 
 </div>
 
-## 📋 Table of Contents
-
-- [Overview](#-overview)
-- [Architecture](#-architecture)
-- [Tech Stack](#-tech-stack)
-- [Features](#-features)
-- [Prerequisites](#-prerequisites)
-- [Quick Start](#-quick-start)
-- [Monitoring Setup](#-monitoring-setup)
-- [Application Screenshots](#-application-screenshots)
-- [Configuration](#-configuration)
-- [API Documentation](#-api-documentation)
-- [Troubleshooting](#-troubleshooting)
-- [Cleanup](#-cleanup--cost-management)
-- [Team](#-team)
+Production-style deployment of a **Random Name Generator** on **AWS EKS (Auto Mode)** with:
+- Private **AWS ECR** image
+- **GitHub Actions** CI/CD (build → push → deploy)
+- **NLB** exposure for the app
+- **MongoDB 3.6** via **StatefulSet + PVC** (EBS CSI)
+- **Prometheus + Grafana** monitoring (Helm `kube-prometheus-stack`)
 
 ---
 
-## 🎯 Overview
-
-A **production-ready, cloud-native Name Generation Application** showcasing enterprise DevOps practices. This project demonstrates a complete microservices architecture with automated deployment pipelines, infrastructure-as-code, container orchestration, and comprehensive monitoring—all running on AWS EKS.
-
-### 🏆 Key Achievements
-
-- ✅ **Zero-downtime deployments** with rolling updates
-- ✅ **99.9% uptime SLA** with high availability design
-- ✅ **Auto-scaling** based on CPU/memory metrics
-- ✅ **Full observability** with Prometheus & Grafana
-- ✅ **Secure by default** with RBAC, encrypted storage, and VPC isolation
-- ✅ **Infrastructure as Code** with eksctl and Kubernetes manifests
+## 📚 Table of Contents
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Repository Structure](#repository-structure)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [How to Run](#how-to-run)
+- [Monitoring](#monitoring)
+- [Screenshots](#screenshots)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Cleanup](#cleanup)
 
 ---
 
-## 🏗️ Architecture
+## Overview
 
-### System Architecture Diagram
+- **Cluster**: `dev-cluster` (region `eu-west-1`) – EKS **Auto Mode**
+- **Image Registry**: Private ECR – `339712888957.dkr.ecr.eu-west-1.amazonaws.com/namegen:latest`
+- **Application**: Node.js service that generates and stores random names in MongoDB
+- **Database**: MongoDB **3.6** (StatefulSet + PVC)
+- **Exposure**: Service `namegen` Type **LoadBalancer** → **NLB** on port **80**
+- **Monitoring**: `kube-prometheus-stack` (Prometheus, Alertmanager, Grafana). Grafana is exposed via `LoadBalancer`.
 
-![Architecture Diagram](screenshots/diagram.png)
+---
 
-### 📊 Application Flow
+## Architecture
 
-| Component       | Technology       | Purpose                                     |
-|----------------|------------------|---------------------------------------------|
-| **Frontend**   | HTML/CSS/JS      | Static web interface                       |
-| **Backend**    | Node.js/Express  | RESTful API server                         |
-| **Database**   | MongoDB          | Persistent data storage                    |
-| **Load Balancer** | AWS NLB       | Traffic distribution & high availability   |
-| **Monitoring** | Prometheus/Grafana | Metrics collection & visualization        |
+![Architecture](screenshots/diagram.drawio.png)
+
+### Application Flow
+
+| Component         | Technology          | Purpose                                      |
+|------------------:|---------------------|----------------------------------------------|
+| Frontend          | HTML/CSS/JS         | Static web page                              |
+| Backend           | Node.js / Express   | REST API                                     |
+| Database          | MongoDB 3.6         | Persistent storage                           |
+| Load Balancer     | AWS NLB             | External access & high availability          |
+| Monitoring        | Prometheus/Grafana  | Metrics collection and visualization         |
+
+**Left → Right**
+1. GitHub Actions builds an image and pushes to **ECR**.
+2. Deployment `namegen` pulls from ECR and runs **2 replicas**.
+3. Service `namegen` (Type=LoadBalancer) creates an **NLB** (HTTP 80).
+4. Service `mongo` (ClusterIP) targets a **StatefulSet** with **PVC** (EBS CSI).
+5. **Prometheus** scrapes metrics; **Grafana** displays dashboards.
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Core Application
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Node.js** | 18 LTS | Runtime environment |
-| **Express.js** | 4.18+ | Web framework |
-| **MongoDB** | 3.6 | NoSQL database |
-| **Faker.js** | Latest | Mock data generation |
-| **Winston** | 3.8+ | Structured logging |
+| Technology  | Version | Purpose         |
+|-------------|---------|-----------------|
+| Node.js     | 18 LTS  | Runtime         |
+| Express     | 4.18+   | Web framework   |
+| MongoDB     | 3.6     | NoSQL database  |
 
 ### DevOps & Infrastructure
-| Technology | Purpose |
-|------------|---------|
-| **Docker** | Container platform with multi-stage builds |
-| **Kubernetes** | Container orchestration |
-| **AWS EKS** | Managed Kubernetes service |
-| **AWS ECR** | Container registry |
-| **AWS EBS** | Persistent storage (GP3) |
-| **AWS NLB** | Network load balancing |
-| **eksctl** | EKS cluster provisioning |
-| **Helm** | Kubernetes package manager |
+| Technology        | Purpose                                   |
+|-------------------|-------------------------------------------|
+| Docker            | Build container image                      |
+| Kubernetes        | Orchestration on EKS                       |
+| AWS EKS (Auto)    | Managed cluster                            |
+| AWS ECR (private) | Container registry                         |
+| AWS EBS (CSI)     | Persistent volumes (PVC/PV)                |
+| AWS NLB           | External access via Service LoadBalancer   |
+| Helm              | `kube-prometheus-stack` for monitoring     |
 
 ### Monitoring & Security
-| Technology | Purpose |
-|------------|---------|
-| **Prometheus** | Metrics collection |
-| **Grafana** | Metrics visualization |
-| **RBAC** | Access control |
-| **VPC** | Network isolation |
-| **TLS/SSL** | Encryption in transit |
+| Technology  | Purpose                     |
+|-------------|-----------------------------|
+| Prometheus  | Metrics scrape & storage    |
+| Grafana     | Dashboards                  |
+| RBAC        | Access control in K8s       |
+| Secrets     | Credentials (GitHub/K8s)    |
 
 ---
 
-## ✨ Features
+## Repository Structure
+.
+├─ .github/workflows/
+│ └─ deploy.yml
+├─ k8s-manifests/
+│ ├─ app.yml
+│ ├─ app_svc.yml
+│ ├─ mongodb.yml
+│ └─ db_svc.yml
+├─ screenshots/
+│ └─ *.png (diagrams & proof screenshots)
+├─ Dockerfile
+├─ server.js
+├─ package.json
+└─ README.md
 
-### 🚀 Application Features
-- **Random Name Generation** - Generate unique names using Faker.js
-- **RESTful API** - Clean API design with proper HTTP methods
-- **Health Checks** - Liveness and readiness probes
-- **Structured Logging** - JSON formatted logs with Winston
-- **Error Handling** - Comprehensive error handling and recovery
-
-### 🔧 DevOps Features
-- **GitOps Workflow** - Declarative infrastructure and deployments
-- **Rolling Updates** - Zero-downtime deployments
-- **Auto-scaling** - Horizontal pod autoscaling
-- **Service Mesh** - Kubernetes-native service discovery
-- **Persistent Storage** - StatefulSet for MongoDB with EBS volumes
-- **Load Balancing** - AWS NLB for high availability
-
-### 🔒 Security Features
-- **Non-root Containers** - Security-hardened containers
-- **Encrypted Storage** - EBS encryption at rest
-- **Network Policies** - VPC and security group isolation
-- **RBAC** - Fine-grained access control
-- **Secrets Management** - Kubernetes secrets for sensitive data
 
 ---
 
-## 📦 Prerequisites
+## 🔁 CI/CD Pipeline
 
-Ensure you have the following tools installed:
+- Workflow: `.github/workflows/deploy.yml`
+- Steps:
+  1. Configure AWS credentials (GitHub Secrets)
+  2. Login to **ECR (private)**
+  3. **Build** Docker image → **Tag** as `namegen:latest`
+  4. **Push** to `339712888957.dkr.ecr.eu-west-1.amazonaws.com/namegen:latest`
+  5. `aws eks update-kubeconfig --name dev-cluster --region eu-west-1`
+  6. `kubectl apply -n namegen -f k8s-manifests/`
+  7. Force image update + rollout:
+     ```
+     kubectl set image deployment/namegen namegen=$IMAGE -n namegen
+     kubectl rollout status deployment/namegen -n namegen
+     ```
 
-```bash
-# Check AWS CLI
-aws --version  # Should be 2.x
-
-# Check kubectl
-kubectl version --client  # Should be 1.27+
-
-# Check eksctl
-eksctl version  # Should be 0.150+
-
-# Check Docker
-docker --version  # Should be 20.10+
-
-# Check Helm
-helm version  # Should be 3.x
-```
-
-### 🔑 AWS Configuration
-
-```bash
-# Configure AWS credentials
-aws configure
-
-# Verify access
-aws sts get-caller-identity
-```
+**GitHub Secrets required**
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
 
 ---
 
-## 🚀 Quick Start
+## How to Run
 
-### Step 1: Clone Repository
-
-```bash
-git clone https://github.com/your-org/devops-project-team2.git
-cd devops-project-team2
-```
-
-### Step 2: Create EKS Cluster
+> Cluster already exists: `dev-cluster` (region `eu-west-1`)
 
 ```bash
-# Create the cluster (takes ~20 minutes)
-eksctl create cluster -f clusters/team2_cluster.yaml
+# 1) Clone
+git clone https://github.com/levanabas/Generator-eks-project.git
+cd Generator-eks-project
 
-# Verify cluster is ready
+# 2) Connect kubectl
+aws eks update-kubeconfig --name dev-cluster --region eu-west-1
 kubectl get nodes
-```
 
-### Step 3: Configure kubectl
+# 3) Deploy app + DB (namespace: namegen)
+kubectl apply -n namegen -f k8s-manifests/
+kubectl get pods -n namegen
+kubectl get svc  -n namegen
 
-```bash
-# Update kubeconfig
-aws eks update-kubeconfig --region us-west-2 --name team2-cluster
+# 4) Get external URL (NLB)
+kubectl get svc namegen -n namegen \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
+# open http://<hostname>/
 
-# Verify connection
-kubectl cluster-info
-```
 
-### Step 4: Deploy Storage Class
+Monitoring
 
-```bash
-# Create storage class for persistent volumes
-kubectl apply -f k8s_manifests/storage_svc.yaml
+Install (if needed):
 
-# Verify storage class
-kubectl get storageclass
-```
+kubectl create ns monitoring || true
 
-### Step 5: Deploy MongoDB
-
-```bash
-# Deploy MongoDB StatefulSet
-kubectl apply -f k8s_manifests/db_deployment.yaml
-
-# Deploy MongoDB Service
-kubectl apply -f k8s_manifests/db_srvc.yaml
-
-# Verify MongoDB is running
-kubectl get statefulsets
-kubectl get pods -l app=mongo-team2
-```
-
-### Step 6: Deploy Application
-
-```bash
-# Deploy application
-kubectl apply -f k8s_manifests/app_deployment.yaml
-
-# Deploy application service
-kubectl apply -f k8s_manifests/app_srvc.yaml
-
-# Verify deployment
-kubectl get deployments
-kubectl get pods -l app=namegen-team2
-```
-
-### Step 7: Access Application
-
-```bash
-# Get LoadBalancer URL
-kubectl get service namegen-team2-service
-
-# Access the application
-# http://<EXTERNAL-IP>/
-```
-
----
-
-## 📊 Monitoring Setup
-
-### Install Prometheus
-
-```bash
-# Add Prometheus Helm repository
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
-# Install Prometheus
-helm install prometheus prometheus-community/prometheus \
-  --set server.persistentVolume.size=10Gi \
-  --set server.service.type=LoadBalancer
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --set grafana.service.type=LoadBalancer \
+  --set prometheus.service.type=LoadBalancer
 
-# Get Prometheus URL
-kubectl get svc prometheus-server
-```
+Access:
 
-### Install Grafana
+# Grafana
+kubectl -n monitoring get svc monitoring-grafana \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
 
-```bash
-# Add Grafana Helm repository
-helm repo add grafana https://grafana.github.io/helm-charts
-helm repo update
+# Grafana admin password
+kubectl -n monitoring get secret monitoring-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 -d; echo
 
-# Install Grafana
-helm install grafana grafana/grafana \
-  --set persistence.enabled=true \
-  --set persistence.size=10Gi \
-  --set service.type=LoadBalancer
+# Prometheus
+kubectl -n monitoring get svc monitoring-kube-prometheus-prometheus \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
 
-# Get admin password
-kubectl get secret --namespace default grafana -o jsonpath="{.data.admin-password}" | base64 --decode
+📷 Screenshots
 
-# Get Grafana URL
-kubectl get svc grafana
-```
+CI Pipeline – screenshots/ci_pipeline.png
 
-### Configure Grafana Dashboard
+EKS Cluster – screenshots/cluster.png
 
-1. Access Grafana using the LoadBalancer URL
-2. Login with username: `admin` and the password retrieved above
-3. Add Prometheus as a data source:
-   - URL: `http://prometheus-server`
-4. Import dashboard ID: `3662` for Kubernetes cluster monitoring
+Kubernetes Pods – screenshots/pods.png
 
----
+Grafana – screenshots/grafana.png
 
-## 🖼️ Application Screenshots
+App UI – screenshots/appRandomName.png
 
-### 📱 Application Interface
+Architecture Diagram – screenshots/diagram.drawio.png
 
-![Application UI](screenshots/application.png)
 
-*The Name Generation application interface showing the clean, modern UI with generation controls*
+Configuration
+Environment Variables
+Variable	Description	Example
+MONGODB_URL	Mongo connection string	mongodb://mongo/namegen
+PORT	App port	8080
+Kubernetes (in k8s-manifests/)
 
-### 🎛️ Kubernetes Dashboard
+app.yml – Deployment namegen (2 replicas) + env MONGODB_URL
 
-![Kubernetes Pods](screenshots/pods.png)
+app_svc.yml – Service namegen (LoadBalancer/NLB, port 80)
 
-*Kubernetes pods showing healthy status for all application components*
+mongodb.yml – StatefulSet mongo + PVC
 
-### 📈 Grafana Monitoring
+db_svc.yml – Service mongo (ClusterIP)
 
-![Grafana Dashboard](screenshots/grafana.png)
+Troubleshooting
+kubectl get events -A --sort-by=.lastTimestamp | tail -n 50
+kubectl -n namegen describe svc namegen
+kubectl -n namegen rollout status deploy/namegen
+kubectl -n namegen logs deploy/namegen --tail=100
+kubectl -n namegen get svc namegen -o wide
 
-*Grafana dashboard displaying real-time metrics including CPU usage, memory consumption, and request rates*
+Notes
 
-### ☁️ AWS EKS Cluster
+If EXTERNAL-IP is pending, wait a few minutes for the NLB to provision.
 
-![EKS Cluster](screenshots/cluster.png)
+For Mongo issues, check PVC/PV: kubectl get pvc -n namegen
 
-*AWS EKS console showing the managed Kubernetes cluster with node groups and configurations*
+Cleanup
+# App + DB
+kubectl delete ns namegen --ignore-not-found
 
----
+# Monitoring
+helm -n monitoring uninstall monitoring || true
+kubectl delete ns monitoring --ignore-not-found
 
-## ⚙️ Configuration
+Registry: delete images in ECR if you want to stop pulls and save cost.
 
-### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MONGODB_URL` | MongoDB connection string | `mongodb://mongo-team2:27017/namegen` |
-| `PORT` | Application port | `8080` |
-| `NODE_ENV` | Environment mode | `production` |
-| `LOG_LEVEL` | Winston log level | `info` |
-| `MAX_POOL_SIZE` | MongoDB connection pool | `10` |
+::contentReference[oaicite:0]{index=0}
 
-### Kubernetes Resources
 
-| Resource | Replicas | CPU Request | CPU Limit | Memory Request | Memory Limit |
-|----------|----------|-------------|-----------|----------------|--------------|
-| **NameGen App** | 2 | 100m | 500m | 128Mi | 512Mi |
-| **MongoDB** | 1 | 200m | 1000m | 256Mi | 1Gi |
-| **Prometheus** | 1 | 500m | 2000m | 512Mi | 2Gi |
-| **Grafana** | 1 | 250m | 1000m | 256Mi | 1Gi |
 
-### Storage Configuration
-
-| Component | Storage Class | Size | Type |
-|-----------|--------------|------|------|
-| **MongoDB** | gp3-encrypted | 20Gi | SSD |
-| **Prometheus** | gp3-encrypted | 10Gi | SSD |
-| **Grafana** | gp3-encrypted | 10Gi | SSD |
-
----
-
-## 📡 API Documentation
-
-### Endpoints
-
-| Method | Endpoint | Description | Response |
-|--------|----------|-------------|----------|
-| `GET` | `/` | Application homepage | HTML |
-| `GET` | `/api/name` | Generate random name | `{ "name": "John Doe" }` |
-| `GET` | `/api/names` | Get last 10 names | `[{ "name": "...", "timestamp": "..." }]` |
-| `GET` | `/health` | Health check | `{ "status": "healthy" }` |
-| `GET` | `/ready` | Readiness check |
